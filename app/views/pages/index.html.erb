@@ -1,0 +1,169 @@
+<div class="row g-0">
+	<div class="col-md-8">
+		<div id="map">
+		</div>
+		<div id="distance" class="distance-container">
+		</div>
+	</div>
+	<div class="col-md-4">
+		<div class="p-3">
+			<h2>Ponto 1: </h2><h2 id="first-point"></h2>
+			<h2>Ponto 2:</h2><h2 id="second-point"></h2>
+			<div class="d-flex">
+				<h2>Distância: </h2><h2 id="total-distance"></h2>
+			</div>
+		</div>
+	</div>
+</div>
+
+<script src="https://unpkg.com/@turf/turf@6/turf.min.js"></script>
+<script>
+	mapboxgl.accessToken =  'pk.eyJ1IjoidGhpYWdvaHJjb3N0YTg2IiwiYSI6ImNsZDF5cjVzbTAzZmMzd3Bna3RiMHZob28ifQ.dmQrOZc_8349xTmCbfNGRw';
+	const map = new mapboxgl.Map({
+	container: 'map',
+	// Choose from Mapbox's core styles, or make your own style with Mapbox Studio
+	style: 'mapbox://styles/mapbox/streets-v12',
+	center: [2.3399, 48.8555],
+	zoom: 12
+});
+ 
+const distanceContainer = document.getElementById('distance');
+ 
+// GeoJSON object to hold our measurement features
+const geojson = {
+	'type': 'FeatureCollection',
+	'features': []
+};
+ 
+// Used to draw a line between points
+const linestring = {
+	'type': 'Feature',
+	'geometry': {
+	'type': 'LineString',
+	'coordinates': []
+	}
+};
+ 
+map.on('load', () => {
+map.addSource('geojson', {
+	'type': 'geojson',
+	'data': geojson
+});
+ 
+// Add styles to the map
+map.addLayer({
+	id: 'measure-points',
+	type: 'circle',
+	source: 'geojson',
+	paint: {
+	'circle-radius': 5,
+	'circle-color': '#000'
+	},
+	filter: ['in', '$type', 'Point']
+	}
+);
+
+map.addLayer({
+	id: 'measure-lines',
+	type: 'line',
+	source: 'geojson',
+	layout: {
+	'line-cap': 'round',
+	'line-join': 'round'
+	},
+	paint: {
+	'line-color': '#000',
+	'line-width': 2.5
+	},
+	filter: ['in', '$type', 'LineString']
+	}
+);
+
+let counter = 1;
+
+map.on('click', (e) => {
+	// add at first-point id the first point clicked
+	if (counter > 2) {
+		return;
+	}
+
+	if(counter == 1 ) {
+		const firstPoint = document.getElementById('first-point');
+		firstPoint.innerHTML = e.lngLat.lng + ', ' + e.lngLat.lat;
+		counter++;
+	} else if (counter == 2) {
+		const secondPoint = document.getElementById('second-point');
+		secondPoint.innerHTML = e.lngLat.lng + ', ' + e.lngLat.lat;
+		counter++;
+	}
+	
+	const features = map.queryRenderedFeatures(e.point, {
+	layers: ['measure-points']
+});
+ 
+// Remove the linestring from the group
+// so we can redraw it based on the points collection.
+if (geojson.features.length > 1) geojson.features.pop();
+ 
+// Clear the distance container to populate it with a new value.
+distanceContainer.innerHTML = '';
+ 
+// If a feature was clicked, remove it from the map.
+if (features.length) {
+const id = features[0].properties.id;
+geojson.features = geojson.features.filter(
+	(point) => point.properties.id !== id
+);
+} else {
+const point = {
+	'type': 'Feature',
+	'geometry': {
+	'type': 'Point',
+	'coordinates': [e.lngLat.lng, e.lngLat.lat]
+},
+	'properties': {
+	'id': String(new Date().getTime())
+	}
+};
+ 
+geojson.features.push(point);
+}
+ 
+if (geojson.features.length > 1) {
+	linestring.geometry.coordinates = geojson.features.map(
+	(point) => point.geometry.coordinates
+);
+ 
+geojson.features.push(linestring);
+ 
+// Populate the distanceContainer with total distance
+	const value = document.createElement('pre');
+	const distance = turf.length(linestring);
+	value.textContent = `Total distance: ${distance.toLocaleString()}km`;
+	distanceContainer.appendChild(value);
+}
+ 
+map.getSource('geojson').setData(geojson);
+});
+});
+ 
+map.on('mousemove', (e) => {
+	const features = map.queryRenderedFeatures(e.point, {
+	layers: ['measure-points']
+	}
+);
+
+// insert on total-distance id the distanceContainer only value without the text
+document.getElementById('total-distance').innerHTML = distanceContainer.innerHTML.replace('Total distance: ', '');
+
+
+// Change the cursor to a pointer when hovering over a point on the map.
+// Otherwise cursor is a crosshair.
+map.getCanvas().style.cursor = features.length
+? 'pointer'
+: 'crosshair';
+});
+
+
+
+</script>
